@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: shams-backend
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn shams_backend.wsgi:application
+    envVars:
+      - key: DEBUG
+        value: False
+      - key: PYTHON_VERSION
+        value: 3.11.0
