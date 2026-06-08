@@ -225,9 +225,14 @@ def update_cart_quantity(request, item_id):
 def checkout(request):
     """Оформить заказ из корзины"""
     phone = request.data.get('phone')
+    print(f"[DEBUG] Checkout для телефона: {phone}")  # Отладка
+    
     try:
         user = User.objects.get(phone=phone)
+        print(f"[DEBUG] Найден пользователь: {user.phone}, SHAMS ID: {user.shams_id}")
+        
         cart_items = CartItem.objects.filter(user=user)
+        print(f"[DEBUG] Товаров в корзине: {cart_items.count()}")
         
         if not cart_items.exists():
             return Response({'error': 'Корзина пуста'}, status=status.HTTP_400_BAD_REQUEST)
@@ -236,7 +241,6 @@ def checkout(request):
         if not rate:
             rate = CurrencyRate.objects.create()
         
-        # Создаем заказ для каждого товара в корзине
         orders = []
         total_amount = 0
         
@@ -257,9 +261,11 @@ def checkout(request):
             )
             orders.append(order)
             total_amount += float(order.total_tmt)
+            print(f"[DEBUG] Создан заказ #{order.id} для {order.user.phone}")
         
         # Очищаем корзину
         cart_items.delete()
+        print(f"[DEBUG] Корзина очищена, создано {len(orders)} заказов")
         
         return Response({
             'status': 'success',
@@ -268,7 +274,11 @@ def checkout(request):
         }, status=status.HTTP_201_CREATED)
         
     except User.DoesNotExist:
+        print(f"[DEBUG] Пользователь с телефоном {phone} НЕ НАЙДЕН!")
         return Response({'error': 'Пользователь не найден'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        print(f"[DEBUG] Ошибка: {e}")
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     
     # ==================== УПРАВЛЕНИЕ ЗАКАЗАМИ (ДЛЯ АДМИНА) ====================
 
