@@ -9,7 +9,16 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = 'django-insecure-your-secret-key-here-change-this-in-production'
 
-DEBUG = True
+DEBUG = os.environ.get('DEBUG', 'True').lower() != 'false'
+
+if not DEBUG:
+    DATABASE_URL = os.environ.get('DATABASE_URL')
+    if DATABASE_URL:
+        DATABASES = {
+            'default': dj_database_url.config(default=DATABASE_URL)
+        }
+    else:
+        raise RuntimeError("DATABASE_URL is required in production")
 
 ALLOWED_HOSTS = ['*']
 
@@ -115,3 +124,13 @@ if os.environ.get('DEBUG') == 'False':
     
     # Добавь WhiteNoise в middleware
     MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
+
+# Для продакшен
+if not DEBUG:
+    DATABASE_URL = os.environ.get('DATABASE_URL')
+    if DATABASE_URL:
+        DATABASES = {
+            'default': dj_database_url.config(default=DATABASE_URL)
+        }
+    else:
+        raise RuntimeError("DATABASE_URL is required in production")
