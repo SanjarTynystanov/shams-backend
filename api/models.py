@@ -14,6 +14,12 @@ class User(models.Model):
         unique=True,
         verbose_name="Номер телефона"
     )
+    name = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        verbose_name="Имя пользователя"
+    )
     shams_id = models.CharField(
         max_length=10,
         unique=True,
@@ -31,6 +37,12 @@ class User(models.Model):
         null=True,
         verbose_name="Код подтверждения"
     )
+    fcm_token = models.CharField(
+        max_length=500,
+        blank=True,
+        null=True,
+        verbose_name="FCM токен для уведомлений"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -39,10 +51,9 @@ class User(models.Model):
         verbose_name_plural = "Пользователи"
 
     def __str__(self):
-        return f"{self.phone} - SHAMS-{self.shams_id or 'не присвоен'}"
+        return f"{self.name or self.phone} - SHAMS-{self.shams_id or 'не присвоен'}"
 
     def generate_shams_id(self):
-        """Генерация уникального 4-значного ID"""
         while True:
             new_id = str(random.randint(1000, 9999))
             if not User.objects.filter(shams_id=new_id).exists():
@@ -51,7 +62,6 @@ class User(models.Model):
         return self.shams_id
 
     def generate_verification_code(self):
-        """Генерация 6-значного кода для SMS"""
         code = str(random.randint(100000, 999999))
         self.verification_code = code
         return code
@@ -125,13 +135,42 @@ class Order(models.Model):
         return f"Заказ #{self.id} - {self.user.phone}"
 
     def get_china_label(self):
-        """Сгенерировать данные для наклейки в Китае"""
         return {
             'recipient_name': f'Shams Cargo SHAMS-{self.user.shams_id}',
             'address_line': f'Урумчи, склад SHAMS, ID: {self.user.shams_id}',
             'order_id': self.id,
             'shams_id': self.user.shams_id
         }
+
+
+class Notification(models.Model):
+    """Модель уведомлений"""
+    NOTIFICATION_TYPES = [
+        ('order_created', 'Заказ создан'),
+        ('purchased', 'Выкуплено'),
+        ('in_china', 'На складе в Китае'),
+        ('weight_confirmed', 'Вес подтвержден'),
+        ('in_transit', 'В пути'),
+        ('in_dushanbe', 'Прибыло в Душанбе'),
+        ('delivered', 'Выдано'),
+    ]
+    
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, null=True, blank=True, related_name='notifications')
+    title = models.CharField(max_length=200, verbose_name="Заголовок")
+    body = models.TextField(verbose_name="Текст уведомления")
+    notification_type = models.CharField(max_length=50, choices=NOTIFICATION_TYPES)
+    is_read = models.BooleanField(default=False, verbose_name="Прочитано")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Уведомление"
+        verbose_name_plural = "Уведомления"
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.title} - {self.user.phone}"
+
 
 class CartItem(models.Model):
     """Модель корзины"""

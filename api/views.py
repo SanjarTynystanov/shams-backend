@@ -2,14 +2,15 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 from decimal import Decimal
-from .models import User, CurrencyRate, Order, CartItem
+from .models import User, CurrencyRate, Order, CartItem, Notification
 from .serializers import (
     UserSerializer, PhoneLoginSerializer, VerifyCodeSerializer, 
     SyncUserSerializer, CurrencyRateSerializer, CalculatePriceSerializer, 
-    OrderSerializer, CartItemSerializer
+    OrderSerializer, CartItemSerializer, NotificationSerializer
 )
 import random
-import string   
+import string
+from datetime import datetime
 
 # ==================== АВТОРИЗАЦИЯ ====================
 
@@ -67,6 +68,40 @@ def verify_code(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['POST'])
+def update_user_name(request):
+    """Обновить имя пользователя"""
+    phone = request.data.get('phone')
+    name = request.data.get('name', '').strip()
+    
+    if not phone or not name:
+        return Response({'error': 'Телефон и имя обязательны'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(phone=phone)
+        user.name = name
+        user.save()
+        return Response({'status': 'success', 'name': user.name})
+    except User.DoesNotExist:
+        return Response({'error': 'Пользователь не найден'}, status=status.HTTP_404_NOT_FOUND)
+
+@api_view(['POST'])
+def save_fcm_token(request):
+    """Сохранить FCM токен для уведомлений"""
+    phone = request.data.get('phone')
+    fcm_token = request.data.get('fcm_token')
+    
+    if not phone or not fcm_token:
+        return Response({'error': 'Телефон и токен обязательны'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(phone=phone)
+        user.fcm_token = fcm_token
+        user.save()
+        return Response({'status': 'success'})
+    except User.DoesNotExist:
+        return Response({'error': 'Пользователь не найден'}, status=status.HTTP_404_NOT_FOUND)
+
+@api_view(['POST'])
 def sync_user(request):
     """Синхронизация пользователя по телефону и SHAMS ID"""
     serializer = SyncUserSerializer(data=request.data)
@@ -100,6 +135,26 @@ def get_user(request, phone):
         return Response({'error': 'Пользователь не найден'}, 
                       status=status.HTTP_404_NOT_FOUND)
 
+@api_view(['GET'])
+def get_user_notifications(request, phone):
+    """Получить уведомления пользователя"""
+    try:
+        user = User.objects.get(phone=phone)
+        notifications = Notification.objects.filter(user=user).order_by('-created_at')
+        return Response(NotificationSerializer(notifications, many=True).data)
+    except User.DoesNotExist:
+        return Response({'error': 'Пользователь не найден'}, status=status.HTTP_404_NOT_FOUND)
+
+@api_view(['POST'])
+def mark_notification_read(request, notification_id):
+    """Отметить уведомление как прочитанное"""
+    try:
+        notification = Notification.objects.get(id=notification_id)
+        notification.is_read = True
+        notification.save()
+        return Response({'status': 'success'})
+    except Notification.DoesNotExist:
+        return Response({'error': 'Уведомление не найдено'}, status=status.HTTP_404_NOT_FOUND)
 
 # ==================== КАЛЬКУЛЯТОР ====================
 
@@ -145,7 +200,6 @@ def calculate_price(request):
     
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-# FORCE UPDATE: 2026-06-10
 # ==================== ЗАКАЗЫ ====================
 
 @api_view(['POST'])
@@ -225,7 +279,7 @@ def update_cart_quantity(request, item_id):
 def checkout(request):
     """Оформить заказ из корзины"""
     phone = request.data.get('phone')
-    print(f"[DEBUG] Checkout для телефона: {phone}")  # Отладка
+    print(f"[DEBUG] Checkout для телефона: {phone}")
     
     try:
         user = User.objects.get(phone=phone)
@@ -262,8 +316,16 @@ def checkout(request):
             orders.append(order)
             total_amount += float(order.total_tmt)
             print(f"[DEBUG] Создан заказ #{order.id} для {order.user.phone}")
+            
+            # Создаем уведомление о создании заказа
+            Notification.objects.create(
+                user=user,
+                order=order,
+                title='📋 Заказ создан',
+                body=f'Ваш заказ #{order.id} принят в обработку',
+                notification_type='order_created'
+            )
         
-        # Очищаем корзину
         cart_items.delete()
         print(f"[DEBUG] Корзина очищена, создано {len(orders)} заказов")
         
@@ -279,8 +341,20 @@ def checkout(request):
     except Exception as e:
         print(f"[DEBUG] Ошибка: {e}")
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-    
-    # ==================== УПРАВЛЕНИЕ ЗАКАЗАМИ (ДЛЯ АДМИНА) ====================
+
+
+# ==================== УПРАВЛЕНИЕ ЗАКАЗАМИ (ДЛЯ АДМИНА) ====================
+
+def _create_notification(order, title, body, notification_type):
+    """Вспомогательная функция для создания уведомлений"""
+    Notification.objects.create(
+        user=order.user,
+        order=order,
+        title=title,
+        body=body,
+        notification_type=notification_type
+    )
+    print(f"📧 Уведомление для {order.user.phone}: {title} - {body}")
 
 @api_view(['POST'])
 def update_order_status(request, order_id):
@@ -288,12 +362,26 @@ def update_order_status(request, order_id):
     try:
         order = Order.objects.get(id=order_id)
         new_status = request.data.get('status')
+        old_status = order.status
         
         if new_status not in dict(Order.STATUS_CHOICES):
             return Response({'error': 'Неверный статус'}, status=status.HTTP_400_BAD_REQUEST)
         
         order.status = new_status
         order.save()
+        
+        # Уведомления при изменении статуса
+        notifications = {
+            'purchased': ('🛒 Товар выкуплен', f'Ваш заказ #{order.id} успешно выкуплен на китайском маркетплейсе', 'purchased'),
+            'in_china': ('📦 Товар прибыл на склад', f'Ваш заказ #{order.id} поступил на склад в Китае и готовится к отправке', 'in_china'),
+            'in_transit': ('🚚 Груз выехал', f'Ваша посылка (заказ #{order.id}) отправлена из Китая и находится в пути', 'in_transit'),
+            'in_dushanbe': ('📍 Прибыло в Душанбе', f'Ваша посылка (заказ #{order.id}) прибыла в Душанбе и готова к выдаче', 'in_dushanbe'),
+            'delivered': ('✅ Товар выдан', f'Ваш заказ #{order.id} успешно получен на складе', 'delivered'),
+        }
+        
+        if new_status in notifications:
+            title, body, notif_type = notifications[new_status]
+            _create_notification(order, title, body, notif_type)
         
         return Response({
             'status': 'success',
@@ -318,11 +406,17 @@ def update_order_weight(request, order_id):
         if rate:
             shipping = weight_kg * rate.shipping_price_per_kg
             order.shipping_cost = shipping
-            
-            # Обновляем общую сумму (товар + доставка)
             order.total_tmt = order.total_tmt + shipping
         
         order.save()
+        
+        # Уведомление о подтверждении веса
+        _create_notification(
+            order, 
+            '⚖️ Вес подтвержден', 
+            f'Вес вашей посылки: {weight_kg} кг. Стоимость доставки: {shipping} сомони',
+            'weight_confirmed'
+        )
         
         return Response({
             'status': 'success',
@@ -364,7 +458,8 @@ def get_order_by_shams_id(request, shams_id):
         return Response({
             'user': {
                 'phone': user.phone,
-                'shams_id': user.shams_id
+                'shams_id': user.shams_id,
+                'name': user.name
             },
             'orders': OrderSerializer(orders, many=True).data,
             'total_weight': total_weight,
@@ -374,7 +469,7 @@ def get_order_by_shams_id(request, shams_id):
         return Response({'error': 'Пользователь с таким SHAMS ID не найден'}, status=status.HTTP_404_NOT_FOUND)
 
 def send_push_notification(user_phone, title, body):
-    """Отправить push-уведомление пользователю"""
+    """Отправить push-уведомление пользователю через Firebase"""
     # Здесь будет интеграция с Firebase Cloud Messaging
-    # Пока заглушка
-    print(f"Уведомление для {user_phone}: {title} - {body}")
+    # Для демо используем сохранение в БД
+    print(f"📱 Push-уведомление для {user_phone}: {title} - {body}")

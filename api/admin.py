@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import User, CurrencyRate, Order, CartItem
+from .models import User, CurrencyRate, Order, CartItem, Notification
 from decimal import Decimal
 from django.db.models import Sum, Count
 from django.contrib.admin import AdminSite
@@ -8,10 +8,10 @@ from django.shortcuts import render
 
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
-    list_display = ['phone', 'shams_id', 'is_verified', 'created_at']
+    list_display = ['phone', 'name', 'shams_id', 'is_verified', 'created_at']
     list_filter = ['is_verified']
-    search_fields = ['phone', 'shams_id']
-    readonly_fields = ['shams_id', 'verification_code', 'created_at', 'updated_at']
+    search_fields = ['phone', 'shams_id', 'name']
+    readonly_fields = ['shams_id', 'verification_code', 'fcm_token', 'created_at', 'updated_at']
 
 @admin.register(CurrencyRate)
 class CurrencyRateAdmin(admin.ModelAdmin):
@@ -32,13 +32,23 @@ class CurrencyRateAdmin(admin.ModelAdmin):
 class CartItemAdmin(admin.ModelAdmin):
     list_display = ['id', 'user', 'product_name', 'quantity', 'price_tmt', 'created_at']
     list_filter = ['created_at']
-    search_fields = ['product_name', 'user__phone']
+    search_fields = ['product_name', 'user__phone', 'user__name']
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = ['id', 'user', 'title', 'notification_type', 'is_read', 'created_at']
+    list_filter = ['notification_type', 'is_read', 'created_at']
+    search_fields = ['title', 'body', 'user__phone', 'user__name']
+    readonly_fields = ['created_at']
+    
+    def has_add_permission(self, request):
+        return False  # Уведомления создаются только автоматически
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ['id', 'user_phone', 'product_name_short', 'quantity', 'weight_display', 'total_tmt', 'status_tag', 'created_at']
+    list_display = ['id', 'user_phone', 'user_name', 'product_name_short', 'quantity', 'weight_display', 'total_tmt', 'status_tag', 'created_at']
     list_filter = ['status', 'created_at']
-    search_fields = ['product_name', 'user__phone', 'user__shams_id', 'tracking_number']
+    search_fields = ['product_name', 'user__phone', 'user__name', 'user__shams_id', 'tracking_number']
     readonly_fields = ['price_yuan', 'price_tmt', 'markup_tmt', 'total_tmt', 'created_at']
     
     fieldsets = (
@@ -59,6 +69,11 @@ class OrderAdmin(admin.ModelAdmin):
         return obj.user.phone
     user_phone.short_description = 'Телефон'
     user_phone.admin_order_field = 'user__phone'
+    
+    def user_name(self, obj):
+        return obj.user.name or '—'
+    user_name.short_description = 'Имя'
+    user_name.admin_order_field = 'user__name'
     
     def product_name_short(self, obj):
         return obj.product_name[:50] + '...' if len(obj.product_name) > 50 else obj.product_name
@@ -96,7 +111,6 @@ class OrderAdmin(admin.ModelAdmin):
     status_tag.short_description = 'Статус'
     
     def save_model(self, request, obj, form, change):
-        # При сохранении веса автоматически рассчитываем доставку
         if obj.weight_kg:
             rate = CurrencyRate.objects.first()
             if rate:
@@ -124,6 +138,7 @@ class OrderAdmin(admin.ModelAdmin):
         queryset.update(status='delivered')
     mark_as_delivered.short_description = 'Отметить как "Выдано"'
 
+
 class DashboardStats:
     @staticmethod
     def get_stats():
@@ -131,13 +146,8 @@ class DashboardStats:
         completed_orders = Order.objects.filter(status='delivered').count()
         pending_orders = Order.objects.filter(status='pending').count()
         
-        # Общая выручка
         total_revenue = Order.objects.aggregate(total=Sum('total_tmt'))['total'] or 0
-        
-        # Прибыль от комиссии (3%)
         total_commission = Order.objects.aggregate(total=Sum('markup_tmt'))['total'] or 0
-        
-        # Общий вес отправленных грузов
         total_weight = Order.objects.filter(weight_kg__isnull=False).aggregate(total=Sum('weight_kg'))['total'] or 0
         
         return {

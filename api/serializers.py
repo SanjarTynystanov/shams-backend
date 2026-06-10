@@ -1,10 +1,10 @@
 from rest_framework import serializers
-from .models import User, CurrencyRate, Order, CartItem
+from .models import User, CurrencyRate, Order, CartItem, Notification
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'phone', 'shams_id', 'is_verified', 'created_at']
+        fields = ['id', 'phone', 'name', 'shams_id', 'is_verified', 'created_at']
         read_only_fields = ['id', 'shams_id', 'is_verified', 'created_at']
 
 class PhoneLoginSerializer(serializers.Serializer):
@@ -42,3 +42,18 @@ class CartItemSerializer(serializers.ModelSerializer):
     
     def get_total_tmt(self, obj):
         return float(obj.get_total_tmt())
+
+class NotificationSerializer(serializers.ModelSerializer):
+    formatted_date = serializers.SerializerMethodField(read_only=True)
+    formatted_time = serializers.SerializerMethodField(read_only=True)
+    
+    class Meta:
+        model = Notification
+        fields = ['id', 'title', 'body', 'notification_type', 'is_read', 'created_at', 'formatted_date', 'formatted_time']
+        read_only_fields = ['id', 'created_at']
+    
+    def get_formatted_date(self, obj):
+        return obj.created_at.strftime('%d.%m.%Y')
+    
+    def get_formatted_time(self, obj):
+        return obj.created_at.strftime('%H:%M')

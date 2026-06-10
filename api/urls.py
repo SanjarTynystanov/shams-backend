@@ -7,6 +7,10 @@ urlpatterns = [
     path('verify-code/', views.verify_code, name='verify_code'),
     path('sync-user/', views.sync_user, name='sync_user'),
     path('user/<str:phone>/', views.get_user, name='get_user'),
+    path('user/update-name/', views.update_user_name, name='update_user_name'),
+    path('user/save-fcm-token/', views.save_fcm_token, name='save_fcm_token'),
+    path('user/notifications/<str:phone>/', views.get_user_notifications, name='get_user_notifications'),
+    path('notification/<int:notification_id>/read/', views.mark_notification_read, name='mark_notification_read'),
     
     # КАЛЬКУЛЯТОР
     path('rates/', views.get_rates, name='get_rates'),
