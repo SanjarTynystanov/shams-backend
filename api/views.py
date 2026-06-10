@@ -145,7 +145,7 @@ def calculate_price(request):
     
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
+# FORCE UPDATE: 2026-06-10
 # ==================== ЗАКАЗЫ ====================
 
 @api_view(['POST'])
