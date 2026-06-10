@@ -11,7 +11,7 @@ urlpatterns = [
     path('user/save-fcm-token/', views.save_fcm_token, name='save_fcm_token'),
     path('user/notifications/<str:phone>/', views.get_user_notifications, name='get_user_notifications'),
     path('notification/<int:notification_id>/read/', views.mark_notification_read, name='mark_notification_read'),
-    
+    path('create-notification/', views.create_notification, name='create_notification'),
     # КАЛЬКУЛЯТОР
     path('rates/', views.get_rates, name='get_rates'),
     path('calculate/', views.calculate_price, name='calculate_price'),
@@ -32,4 +32,6 @@ urlpatterns = [
     path('order/<int:order_id>/weight/', views.update_order_weight, name='update_order_weight'),
     path('order/<int:order_id>/tracking/', views.add_tracking_number, name='add_tracking_number'),
     path('orders/shams/<str:shams_id>/', views.get_order_by_shams_id, name='get_order_by_shams_id'),
+
+    path('create-notification/', views.create_notification, name='create_notification'),
 ]
