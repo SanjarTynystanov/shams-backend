@@ -471,5 +471,6 @@ def get_order_by_shams_id(request, shams_id):
 def send_push_notification(user_phone, title, body):
     """Отправить push-уведомление пользователю через Firebase"""
     # Здесь будет интеграция с Firebase Cloud Messaging
+    # FORCE UPDATE: 2026-06-10 16:30 - ADDED UPDATE_USER_NAME ENDPOINT
     # Для демо используем сохранение в БД
     print(f"📱 Push-уведомление для {user_phone}: {title} - {body}")
