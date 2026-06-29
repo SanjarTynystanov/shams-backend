@@ -1,0 +1,61 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrahead %}
+<link rel="stylesheet" href="{% static 'admin/css/shams-admin.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-stats">
+    <div class="dashboard-stat-card">
+        <div class="stat-number">{{ stats.total_orders }}</div>
+        <div class="stat-label">📦 Всего заказов</div>
+    </div>
+    <div class="dashboard-stat-card stat-success">
+        <div class="stat-number">{{ stats.completed_orders }}</div>
+        <div class="stat-label">✅ Выполнено</div>
+    </div>
+    <div class="dashboard-stat-card stat-danger">
+        <div class="stat-number">{{ stats.pending_orders }}</div>
+        <div class="stat-label">⏳ В обработке</div>
+    </div>
+    <div class="dashboard-stat-card stat-info">
+        <div class="stat-number">{{ stats.total_weight|floatformat:1 }} кг</div>
+        <div class="stat-label">⚖️ Общий вес</div>
+    </div>
+</div>
+
+<div class="dashboard-grid">
+    <div class="module dashboard-module">
+        <h2>💵 Финансы</h2>
+        <div class="module-content">
+            <p><strong>Общий доход:</strong> {{ stats.total_revenue|floatformat:2 }} TMT</p>
+            <p><strong>Комиссия (3%):</strong> {{ stats.total_commission|floatformat:2 }} TMT</p>
+            <p><strong>Чистая прибыль:</strong> {{ stats.total_commission|floatformat:2 }} TMT</p>
+        </div>
+    </div>
+    <div class="module dashboard-module">
+        <h2>🚚 Логистика</h2>
+        <div class="module-content">
+            <p><strong>Всего отправлено:</strong> {{ stats.total_weight|floatformat:1 }} кг</p>
+            <p><strong>Средний вес заказа:</strong> 
+                {% if stats.total_orders > 0 %}
+                    {{ stats.total_weight|floatformat:1|divisibleby:stats.total_orders }} кг
+                {% else %}
+                    0 кг
+                {% endif %}
+            </p>
+        </div>
+    </div>
+</div>
+
+<div class="module dashboard-module">
+    <h2>📋 Быстрые действия</h2>
+    <div class="module-content quick-actions">
+        <a href="{% url 'admin:api_order_changelist' %}" class="button">📦 Все заказы</a>
+        <a href="{% url 'admin:api_order_add' %}" class="button">➕ Создать заказ</a>
+        <a href="{% url 'admin:api_user_changelist' %}" class="button">👤 Пользователи</a>
+        <a href="{% url 'admin:api_currencyrate_changelist' %}" class="button">💱 Курсы валют</a>
+    </div>
+</div>
+{% endblock %}
