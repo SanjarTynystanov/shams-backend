@@ -22,7 +22,7 @@ urlpatterns = [
     
     # КОРЗИНА
     path('cart/add/', views.add_to_cart, name='add_to_cart'),
-    path('cart/<str:phone>/', views.get_cart, name='get_cart'),
+    path('user/<path:phone>/', views.get_user, name='get_user'),
     path('cart/remove/<int:item_id>/', views.remove_from_cart, name='remove_from_cart'),
     path('cart/update/<int:item_id>/', views.update_cart_quantity, name='update_cart_quantity'),
     path('checkout/', views.checkout, name='checkout'),
